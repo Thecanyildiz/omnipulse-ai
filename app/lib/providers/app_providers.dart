@@ -47,21 +47,50 @@ final activeSyncJobStreamProvider = StreamProvider<SyncJobModel?>((ref) {
 });
 
 /// 2. HESAPLAR LİSTESİ CANLI DİNLEYİCİSİ (Supabase Realtime accounts)
-final accountsStreamProvider = StreamProvider<List<AccountModel>>((ref) {
+/// Önce hızlı HTTPS REST ile anında veriyi doldurur, ardından Realtime Stream'i dinler.
+final accountsStreamProvider = StreamProvider<List<AccountModel>>((ref) async* {
   if (!isSupabaseReady()) {
-    return Stream.value(const <AccountModel>[]);
+    yield const <AccountModel>[];
+    return;
   }
   final client = Supabase.instance.client;
-  return client
-      .from('accounts')
-      .stream(primaryKey: ['id'])
-      .order('created_at', ascending: true)
-      .map((rows) {
-        return rows
-            .where((r) => (r['is_active'] as bool? ?? true))
-            .map((r) => AccountModel.fromJson(r))
-            .toList();
-      });
+
+  // 1. ADIM: Masaüstü / mobil açılır açılmaz doğrudan REST ile anında verileri getir
+  try {
+    final initialRows = await client
+        .from('accounts')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', ascending: true);
+    final initialList = (initialRows as List)
+        .map((r) => AccountModel.fromJson(r as Map<String, dynamic>))
+        .toList();
+    if (initialList.isNotEmpty) {
+      yield initialList;
+    }
+  } catch (e) {
+    debugPrint('İlk hesap yükleme hatası: ' + e.toString());
+  }
+
+  // 2. ADIM: Canlı Realtime Değişiklik Akışını Dinle
+  try {
+    final stream = client
+        .from('accounts')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: true)
+        .map((rows) {
+          return rows
+              .where((r) => (r['is_active'] as bool? ?? true))
+              .map((r) => AccountModel.fromJson(r))
+              .toList();
+        });
+
+    await for (final accounts in stream) {
+      yield accounts;
+    }
+  } catch (e) {
+    debugPrint('Supabase realtime stream hatası: ' + e.toString());
+  }
 });
 
 /// Filtrelenmiş Hesaplar Listesi Sağlayıcısı

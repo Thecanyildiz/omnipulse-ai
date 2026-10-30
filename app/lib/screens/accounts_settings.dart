@@ -39,20 +39,57 @@ class _AccountsSettingsScreenState extends ConsumerState<AccountsSettingsScreen>
     _loadSavedCloudSettings();
   }
 
+  bool _isTestingConnection = false;
+
   Future<void> _loadSavedCloudSettings() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
+    final savedUrl = (prefs.getString(AppConstants.prefSupabaseUrl) ?? '').trim();
+    final savedKey = (prefs.getString(AppConstants.prefSupabaseAnonKey) ?? '').trim();
+    final savedRepo = (prefs.getString(AppConstants.prefGithubRepo) ?? '').trim();
+    final savedToken = (prefs.getString(AppConstants.prefGithubToken) ?? '').trim();
+    final savedGemini = (prefs.getString(AppConstants.prefGeminiApiKey) ?? '').trim();
+
     setState(() {
-      _supabaseUrlCtrl.text =
-          prefs.getString(AppConstants.prefSupabaseUrl) ?? AppConstants.defaultSupabaseUrl;
-      _supabaseKeyCtrl.text =
-          prefs.getString(AppConstants.prefSupabaseAnonKey) ?? AppConstants.defaultSupabaseAnonKey;
-      _githubRepoCtrl.text =
-          prefs.getString(AppConstants.prefGithubRepo) ?? AppConstants.defaultGithubRepo;
-      _githubTokenCtrl.text = prefs.getString(AppConstants.prefGithubToken) ?? '';
-      _geminiKeyCtrl.text = prefs.getString(AppConstants.prefGeminiApiKey) ?? '';
+      _supabaseUrlCtrl.text = savedUrl.isNotEmpty ? savedUrl : AppConstants.defaultSupabaseUrl;
+      _supabaseKeyCtrl.text = savedKey.isNotEmpty ? savedKey : AppConstants.defaultSupabaseAnonKey;
+      _githubRepoCtrl.text = (savedRepo.isNotEmpty && savedRepo.contains('/')) ? savedRepo : AppConstants.defaultGithubRepo;
+      _githubTokenCtrl.text = savedToken.isNotEmpty ? savedToken : AppConstants.defaultGithubToken;
+      _geminiKeyCtrl.text = savedGemini.isNotEmpty ? savedGemini : AppConstants.defaultGeminiApiKey;
       _autoUpdateOnStartup = prefs.getBool(AppConstants.prefAutoUpdateEnabled) ?? true;
     });
+  }
+
+  Future<void> _testCloudConnection() async {
+    setState(() => _isTestingConnection = true);
+    try {
+      final client = Supabase.instance.client;
+      final res = await client.from('accounts').select('id, username').eq('is_active', true);
+      final count = (res as List).length;
+      if (!mounted) return;
+      setState(() => _isTestingConnection = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: OmniPulseColors.emeraldViral,
+          content: Text(
+            '✅ Supabase Bulut Bağlantısı Başarılı: ' + count.toString() + ' Aktif Hesap Bağlandı!',
+            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w700),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isTestingConnection = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: OmniPulseColors.coralCritical,
+          content: Text(
+            '❌ Bağlantı Hatası: ' + e.toString(),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _saveCloudSettings() async {
@@ -575,6 +612,29 @@ class _AccountsSettingsScreenState extends ConsumerState<AccountsSettingsScreen>
                     label: const Text(
                       'Bulut Bağlantı Ayarlarını Kaydet',
                       style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _isTestingConnection ? null : _testCloudConnection,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: OmniPulseColors.aiViolet,
+                      side: const BorderSide(color: OmniPulseColors.aiViolet),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    icon: _isTestingConnection
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: OmniPulseColors.aiViolet),
+                          )
+                        : const Icon(LucideIcons.checkCircle2, size: 18),
+                    label: const Text(
+                      'Bulut Bağlantısını ve Hesapları Test Et',
+                      style: TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
                 ),

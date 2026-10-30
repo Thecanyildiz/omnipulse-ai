@@ -65,6 +65,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
   List<_ChartPoint> _buildTimeSeriesPoints(
     List<AccountSnapshotModel> allSnapshots,
     List<VideoModel> allVideos,
+    AccountModel account,
   ) {
     final now = DateTime.now();
     final Duration windowDuration;
@@ -73,34 +74,35 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
 
     if (_selectedWindow == '24h') {
       windowDuration = const Duration(hours: 24);
-      bucketCount = 6; // 4'er saatlik 6 dilim
+      bucketCount = 6;
       axisFormat = DateFormat('HH:mm');
     } else if (_selectedWindow == '30d') {
       windowDuration = const Duration(days: 30);
-      bucketCount = 7; // 5'er günlük 7 dilim
+      bucketCount = 7;
       axisFormat = DateFormat('dd MMM');
     } else {
       windowDuration = const Duration(days: 7);
-      bucketCount = 7; // Günlük 7 dilim
+      bucketCount = 7;
       axisFormat = DateFormat('dd MMM');
     }
 
     final DateTime cutoff = now.subtract(windowDuration);
 
-    // 1. Önce bu zaman penceresinde en az 3 farklı zamanlı snapshot var mı bak
-    final windowSnaps = allSnapshots
+    // 1. Snapshot\'ları tarihe göre sırala
+    final sortedAllSnaps = [...allSnapshots]..sort((a, b) => a.recordedAt.compareTo(b.recordedAt));
+    final List<AccountSnapshotModel> windowSnaps = sortedAllSnaps
         .where((s) => s.recordedAt.isAfter(cutoff))
-        .toList()
-      ..sort((a, b) => a.recordedAt.compareTo(b.recordedAt));
+        .toList();
 
-    // Snapshot değerleri birbirinden farklı mı kontrol et (tek gün içinde 3 kez aynı değer yazıldıysa
-    // video bazlı gerçek zaman eğrisini de dahil et)
-    final Set<int> distinctSnapVals = windowSnaps
-        .map((s) => _selectedMetric == 'views' ? s.totalViews : s.followersCount)
-        .where((v) => v > 0)
-        .toSet();
+    // Eğer pencere içinde sadece 1 snapshot varsa, hemen önceki son snapshot\'ı da başlangıç referansı olarak ekle
+    if (windowSnaps.length == 1 && sortedAllSnaps.isNotEmpty) {
+      final priorSnaps = sortedAllSnaps.where((s) => !s.recordedAt.isAfter(cutoff)).toList();
+      if (priorSnaps.isNotEmpty) {
+        windowSnaps.insert(0, priorSnaps.last);
+      }
+    }
 
-    if (windowSnaps.length >= 3 && distinctSnapVals.length >= 2) {
+    if (windowSnaps.length >= 2) {
       return windowSnaps.map((s) {
         final double val = (_selectedMetric == 'views' ? s.totalViews : s.followersCount).toDouble();
         return _ChartPoint(
@@ -108,28 +110,25 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
           value: val,
           label: axisFormat.format(s.recordedAt),
           tooltipDetail:
-              '${DateFormat('dd MMM HH:mm').format(s.recordedAt)}\nİzlenme: ${AppConstants.formatCompactNumber(s.totalViews)}\nTakipçi: ${AppConstants.formatCompactNumber(s.followersCount)}',
+              '\nİzlenme: \nTakipçi: ',
         );
       }).toList();
     }
 
-    // 2. Eğer hesap yeni eklendiyse ve henüz 7/30 günlük snapshot geçmişi oluşmadıysa,
-    // hesabın gerçek videolarının yayın tarihlerini ve izlenmelerini kullanarak
-    // seçilen zaman penceresine ('24h', '7d', '30d') özel gerçekçi zaman serisi oluştur!
+    // 2. Eğer henüz yeterli snapshot yoksa veya yeni eklenen hesapsa, videolar ve güncel metriklerle gerçekçi eğri kur
     final sortedVideos = [...allVideos]..sort((a, b) => a.publishedAt.compareTo(b.publishedAt));
-    final int currentTotalViews = widget.account.currentTotalViews > 0
-        ? widget.account.currentTotalViews
+    final int currentTotalViews = account.currentTotalViews > 0
+        ? account.currentTotalViews
         : sortedVideos.fold<int>(0, (sum, v) => sum + v.views);
-    final int currentFollowers = widget.account.currentFollowers > 0
-        ? widget.account.currentFollowers
-        : math.max(10, (currentTotalViews * 0.035).round());
+    final int currentFollowers = account.currentFollowers > 0
+        ? account.currentFollowers
+        : math.max(1, (currentTotalViews * 0.035).round());
 
     final double endValue = _selectedMetric == 'views'
-        ? math.max(currentTotalViews.toDouble(), widget.account.currentMedianViews.toDouble())
+        ? math.max(currentTotalViews.toDouble(), account.currentMedianViews.toDouble())
         : currentFollowers.toDouble();
 
     if (endValue <= 0.0) {
-      // Metrik henüz 0 ise asla yapay 1'den 0'a düşen çizgi çizme; düz 0 tabanı ver!
       return List<_ChartPoint>.generate(
         bucketCount,
         (i) {
@@ -142,20 +141,19 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
             value: 0.0,
             label: axisFormat.format(pointTime),
             tooltipDetail:
-                '${DateFormat('dd MMM HH:mm').format(pointTime)}\n${_selectedMetric == 'views' ? 'İzlenme' : 'Takipçi'}: 0',
+                '\n: 0',
           );
         },
       );
     }
 
-    // Pencereye göre başlangıç oranı ('24h' daha dar değişim, '7d' orta, '30d' geniş kümülatif büyüme)
     final double windowSpreadRatio;
     if (_selectedWindow == '24h') {
-      windowSpreadRatio = 0.08; // Son 24 saatte %8'lik dilim
+      windowSpreadRatio = 0.08;
     } else if (_selectedWindow == '7d') {
-      windowSpreadRatio = 0.32; // Son 7 günde %32'lik dilim
+      windowSpreadRatio = 0.32;
     } else {
-      windowSpreadRatio = 0.68; // Son 30 günde %68'lik dilim
+      windowSpreadRatio = 0.68;
     }
 
     final double startValue = math.max(0.0, endValue * (1.0 - windowSpreadRatio));
@@ -167,7 +165,6 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
         Duration(seconds: (windowDuration.inSeconds * progress).round()),
       );
 
-      // O tarihe kadar yayınlanan videoların kümülatif ağırlığını hesapla
       double curveWeight = progress;
       if (sortedVideos.isNotEmpty) {
         final int idx = ((sortedVideos.length - 1) * progress).round();
@@ -187,7 +184,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
           value: roundedVal.toDouble(),
           label: axisFormat.format(pointTime),
           tooltipDetail:
-              '${DateFormat('dd MMM HH:mm').format(pointTime)}\n${_selectedMetric == 'views' ? 'İzlenme' : 'Takipçi'}: ${AppConstants.formatCompactNumber(roundedVal)}',
+              '\n: ',
         ),
       );
     }
@@ -197,7 +194,11 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final account = widget.account;
+    final accountsList = ref.watch(accountsStreamProvider).valueOrNull ?? [];
+    final AccountModel account = accountsList.firstWhere(
+      (a) => a.id == widget.account.id,
+      orElse: () => widget.account,
+    );
     final snapshotsAsync = ref.watch(accountSnapshotsProvider(account.id));
     final videosAsync = ref.watch(accountVideosProvider(account.id));
 
@@ -209,12 +210,33 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
             const SizedBox(width: 8),
             Flexible(
               child: Text(
-                '@${account.username}',
+                '@' + account.username,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.refreshCw, size: 19),
+            tooltip: 'Hesap Verilerini Yenile',
+            onPressed: () {
+              ref.invalidate(accountSnapshotsProvider(account.id));
+              ref.invalidate(accountVideosProvider(account.id));
+              ref.invalidate(accountCompetitorsProvider(account.id));
+              ref.invalidate(accountHashtagsProvider(account.id));
+              ref.invalidate(accountStrategyReportProvider(account.id));
+              ref.invalidate(accountsStreamProvider);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Hesap verileri yenilendi.'),
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -380,7 +402,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                   child: snapshotsAsync.when(
                     data: (snaps) {
                       final videos = videosAsync.valueOrNull ?? const <VideoModel>[];
-                      final chartPoints = _buildTimeSeriesPoints(snaps, videos);
+                      final chartPoints = _buildTimeSeriesPoints(snaps, videos, account);
 
                       final spots = List<FlSpot>.generate(
                         chartPoints.length,

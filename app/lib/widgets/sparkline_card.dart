@@ -153,6 +153,17 @@ class SparklineAccountCard extends StatelessWidget {
                             : account.followerGrowth7d,
                         suffixLabel: '7g',
                       ),
+                      if (!showViewsPrimary && account.currentTotalViews > 0) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          '👁️ ' + AppConstants.formatCompactNumber(account.currentTotalViews) + ' izlenme',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: OmniPulseColors.textSecondaryDark,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

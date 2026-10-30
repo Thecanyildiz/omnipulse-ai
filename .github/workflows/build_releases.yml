@@ -69,6 +69,7 @@ jobs:
             --dart-define=APP_VERSION_TAG=v1.0.${{ github.run_number }} \
             --dart-define=DEFAULT_SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=DEFAULT_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_KEY }} \
+            --dart-define=DEFAULT_GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} \
             --dart-define=DEFAULT_GITHUB_REPO=${{ github.repository }}
 
       - name: 📤 OmniPulse-Android.apk Dosyasını Hazırla
@@ -123,6 +124,7 @@ jobs:
             --dart-define=APP_VERSION_TAG=v1.0.${{ github.run_number }} `
             --dart-define=DEFAULT_SUPABASE_URL=${{ secrets.SUPABASE_URL }} `
             --dart-define=DEFAULT_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_KEY }} `
+            --dart-define=DEFAULT_GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} `
             --dart-define=DEFAULT_GITHUB_REPO=${{ github.repository }}
 
       - name: 🗜️ Derlenen Windows Uygulamasını OmniPulse-Windows.zip Olarak Paketle

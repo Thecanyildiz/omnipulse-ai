@@ -17,20 +17,27 @@ class AppConstants {
   );
 
   // Derleme sırasında (--dart-define) gömülen veya Ayarlar ekranından değiştirilebilen varsayılanlar
-  static const String defaultSupabaseUrl = String.fromEnvironment(
-    'DEFAULT_SUPABASE_URL',
-    defaultValue: 'https://riorunykrmzzlpwqpzyi.supabase.co',
-  );
-  static const String defaultSupabaseAnonKey = String.fromEnvironment(
-    'DEFAULT_SUPABASE_ANON_KEY',
-    defaultValue: 'sb_publishable_ZQ8iwJo821rxAA5MzKwIZg_ERIZ1S94',
-  );
-  static const String defaultGithubRepo = String.fromEnvironment(
-    'DEFAULT_GITHUB_REPO',
-    defaultValue: 'Thecanyildiz/omnipulse-ai',
-  );
+  static const String _envSupabaseUrl = String.fromEnvironment('DEFAULT_SUPABASE_URL');
+  static const String _fallbackSupabaseUrl = 'https://riorunykrmzzlpwqpzyi.supabase.co';
+  static String get defaultSupabaseUrl =>
+      _envSupabaseUrl.trim().isNotEmpty ? _envSupabaseUrl.trim() : _fallbackSupabaseUrl;
+
+  static const String _envSupabaseAnonKey = String.fromEnvironment('DEFAULT_SUPABASE_ANON_KEY');
+  static const String _fallbackSupabaseAnonKey = 'sb_publishable_ZQ8iwJo821rxAA5MzKwIZg_ERIZ1S94';
+  static String get defaultSupabaseAnonKey =>
+      _envSupabaseAnonKey.trim().isNotEmpty ? _envSupabaseAnonKey.trim() : _fallbackSupabaseAnonKey;
+
+  static const String _envGithubRepo = String.fromEnvironment('DEFAULT_GITHUB_REPO');
+  static const String _fallbackGithubRepo = 'Thecanyildiz/omnipulse-ai';
+  static String get defaultGithubRepo =>
+      _envGithubRepo.trim().isNotEmpty ? _envGithubRepo.trim() : _fallbackGithubRepo;
+
   static const String defaultGithubWorkflowFile = 'cloud_sync_engine.yml';
   static const String defaultGithubBranch = 'main';
+
+  // Derleme zamanında gömülebilen veya SharedPreferences'tan okunan kimlik anahtarları
+  static const String defaultGithubToken = String.fromEnvironment('DEFAULT_GITHUB_TOKEN', defaultValue: '');
+  static const String defaultGeminiApiKey = String.fromEnvironment('DEFAULT_GEMINI_API_KEY', defaultValue: '');
 
   // SharedPreferences Anahtarları
   static const String prefSupabaseUrl = 'omnipulse_supabase_url';

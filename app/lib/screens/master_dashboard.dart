@@ -72,6 +72,22 @@ class _MasterDashboardScreenState extends ConsumerState<MasterDashboardScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.refreshCw, size: 19),
+            tooltip: 'Canlı Verileri Yenile',
+            onPressed: () {
+              ref.invalidate(accountsStreamProvider);
+              ref.invalidate(masterBriefingProvider);
+              ref.invalidate(portfolioSummaryProvider);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Veriler yenilendi.'),
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 4),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: FilledButton.icon(

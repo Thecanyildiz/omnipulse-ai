@@ -27,9 +27,16 @@ class GitHubCloudTriggerService {
     int totalAccountsEstimate = 15,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final githubToken = (prefs.getString(AppConstants.prefGithubToken) ?? '').trim();
-    final githubRepo = (prefs.getString(AppConstants.prefGithubRepo) ?? AppConstants.defaultGithubRepo).trim();
-    final githubBranch = (prefs.getString(AppConstants.prefGithubBranch) ?? AppConstants.defaultGithubBranch).trim();
+    final savedToken = (prefs.getString(AppConstants.prefGithubToken) ?? '').trim();
+    final githubToken = savedToken.isNotEmpty ? savedToken : AppConstants.defaultGithubToken;
+
+    final savedRepo = (prefs.getString(AppConstants.prefGithubRepo) ?? '').trim();
+    final githubRepo = (savedRepo.isNotEmpty && savedRepo.contains('/'))
+        ? savedRepo
+        : AppConstants.defaultGithubRepo;
+
+    final savedBranch = (prefs.getString(AppConstants.prefGithubBranch) ?? '').trim();
+    final githubBranch = savedBranch.isNotEmpty ? savedBranch : AppConstants.defaultGithubBranch;
 
     String? createdJobId;
 

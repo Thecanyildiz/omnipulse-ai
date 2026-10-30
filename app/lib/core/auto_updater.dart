@@ -51,8 +51,10 @@ class GitHubAutoUpdater {
   /// GitHub Releases API üzerinden en son sürümü sorgular.
   static Future<ReleaseUpdateInfo?> checkLatestRelease() async {
     final prefs = await SharedPreferences.getInstance();
-    final repo = (prefs.getString(AppConstants.prefGithubRepo) ?? AppConstants.defaultGithubRepo).trim();
-    final token = (prefs.getString(AppConstants.prefGithubToken) ?? '').trim();
+    final savedRepo = (prefs.getString(AppConstants.prefGithubRepo) ?? '').trim();
+    final repo = (savedRepo.isNotEmpty && savedRepo.contains('/')) ? savedRepo : AppConstants.defaultGithubRepo;
+    final savedToken = (prefs.getString(AppConstants.prefGithubToken) ?? '').trim();
+    final token = savedToken.isNotEmpty ? savedToken : AppConstants.defaultGithubToken;
 
     if (repo.isEmpty || !repo.contains('/') || repo == 'kullanici/omnipulse-ai') {
       return null;
