@@ -46,7 +46,7 @@ class EngineConfig:
     # Yapay Zeka ve Platform Anahtarları
     gemini_api_key: str = field(default_factory=lambda: os.getenv("GEMINI_API_KEY", "").strip())
     gemini_model_name: str = field(
-        default_factory=lambda: os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-flash").strip()
+        default_factory=lambda: os.getenv("GEMINI_MODEL_NAME", "gemini-3.8-flash").strip()
     )
     youtube_api_key: str = field(default_factory=lambda: os.getenv("YOUTUBE_API_KEY", "").strip())
 
