@@ -7,7 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/constants.dart';
 import '../core/theme.dart';
@@ -109,7 +109,7 @@ class AiStrategyHubScreen extends ConsumerWidget {
                       tabs: [
                         Tab(icon: Icon(LucideIcons.radar, size: 18), text: 'Otonom Rakipler'),
                         Tab(icon: Icon(LucideIcons.hash, size: 18), text: 'Hashtag Matrisi'),
-                        Tab(icon: Icon(LucideIcons.Lightbulb, size: 18), text: '5 Video & Kanca'),
+                        Tab(icon: Icon(LucideIcons.lightbulb, size: 18), text: '5 Video & Kanca'),
                       ],
                     ),
                   ],

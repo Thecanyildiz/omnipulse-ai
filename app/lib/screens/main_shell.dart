@@ -1,7 +1,7 @@
 // OmniPulse AI — Mobil Alt Menü (BottomNavBar) ve Masaüstü Yan Menü (NavigationRail) Kabuğu (app/lib/screens/main_shell.dart)
 
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../core/constants.dart';
 import '../core/theme.dart';
 import 'master_dashboard.dart';

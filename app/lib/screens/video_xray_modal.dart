@@ -5,7 +5,7 @@
 import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/constants.dart';
 import '../core/theme.dart';
@@ -253,7 +253,7 @@ class VideoXrayModal extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    const Icon(LucideIcons.Cpu, color: Colors.white, size: 26),
+                    const Icon(LucideIcons.cpu, color: Colors.white, size: 26),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(

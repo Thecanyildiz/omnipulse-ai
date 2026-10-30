@@ -113,7 +113,7 @@ class OmniPulseTheme {
           letterSpacing: -0.3,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: OmniPulseColors.cardDark,
         elevation: 0,
         margin: EdgeInsets.zero,
@@ -177,7 +177,7 @@ class OmniPulseTheme {
         elevation: 0,
         centerTitle: false,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: OmniPulseColors.cardLight,
         elevation: 0,
         margin: EdgeInsets.zero,
