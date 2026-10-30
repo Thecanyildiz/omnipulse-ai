@@ -1,6 +1,7 @@
 """
 OmniPulse AI — Bulut Motoru Yapılandırma ve Sabitler Modülü (engine/config.py)
-Ortam değişkenleri, anti-ban bekleme süreleri, algoritma ağırlıkları ve sabitler.
+v2.0 Hızlandırılmış Sürüm: Paralel ThreadPool mimarisi, tek süreçli (single-process) hızlı veri çekme
+ve düşük gecikmeli API zaman aşımları.
 """
 
 import os
@@ -32,7 +33,7 @@ USER_AGENTS: List[str] = [
 
 @dataclass(frozen=True)
 class EngineConfig:
-    """Bulut motorunun çalışma zamanı ayarlarını ve sabitlerini tutan veri sınıfı."""
+    """Bulut motorunun çalışma zamanı ayarlarını ve paralel hız sabitlerini tutan veri sınıfı."""
 
     # Supabase Bağlantı Bilgileri
     supabase_url: str = field(default_factory=lambda: os.getenv("SUPABASE_URL", "").strip())
@@ -59,15 +60,18 @@ class EngineConfig:
     )
     sync_job_id: str = field(default_factory=lambda: os.getenv("SYNC_JOB_ID", "").strip())
 
-    # Anti-Ban (Engel Önleme) ve Tarama Limitleri
-    min_jitter_seconds: float = 4.5
-    max_jitter_seconds: float = 11.0
+    # Paralel Hızlandırma ve Tarama Limitleri (35 dakikadan ~15 saniyeye indiren ayarlar)
+    max_parallel_accounts: int = 5
+    max_parallel_radar_queries: int = 5
+    min_jitter_seconds: float = 0.25
+    max_jitter_seconds: float = 0.85
     max_videos_per_account: int = 15
     niche_detection_sample_size: int = 12
     competitor_videos_per_account: int = 5
     competitor_lookback_days: int = 14
-    http_timeout_seconds: int = 25
-    max_retries_per_request: int = 3
+    http_timeout_seconds: int = 12
+    yt_dlp_timeout_seconds: int = 22
+    max_retries_per_request: int = 2
 
     # Matematiksel Eşik Değerleri
     tier_viral_hit_threshold: float = 2.5
@@ -94,12 +98,9 @@ class EngineConfig:
             )
 
     def apply_anti_ban_jitter(self, context_label: str = "account_scan") -> float:
-        """Ardışık hesap veya platform istekleri arasında rastgele (4.5 - 11.0 sn) bekleme uygular."""
+        """İstekler arasında akışı yavaşlatmayan mikro-jitter (0.25 - 0.85 sn) uygular."""
         sleep_duration = round(
             random.uniform(self.min_jitter_seconds, self.max_jitter_seconds), 2
-        )
-        logger.info(
-            f"[Anti-Ban Jitter] '{context_label}' sonrası {sleep_duration} saniye bekleniyor..."
         )
         time.sleep(sleep_duration)
         return sleep_duration

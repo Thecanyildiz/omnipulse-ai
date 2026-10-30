@@ -1,7 +1,10 @@
 // OmniPulse AI — Mobil Alt Menü (BottomNavBar) ve Masaüstü Yan Menü (NavigationRail) Kabuğu (app/lib/screens/main_shell.dart)
+// v2.0 Otomatik Güncelleme Entegrasyonu: Uygulama her açıldığında GitHub Releases üzerinden
+// en son sürümü kontrol eder ve varsa kullanıcıyı uğraştırmadan otomatik indirip kurar.
 
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../core/auto_updater.dart';
 import '../core/constants.dart';
 import '../core/theme.dart';
 import 'master_dashboard.dart';
@@ -23,6 +26,17 @@ class _MainResponsiveShellState extends State<MainResponsiveShell> {
     AiStrategyHubScreen(),
     AccountsSettingsScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Uygulama açılır açılmaz ilk kare çizildikten sonra GitHub OTA güncellemesini otomatik kontrol et
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        GitHubAutoUpdater.checkAndAutoUpdateOnStartup(context);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,13 +77,26 @@ class _MainResponsiveShellState extends State<MainResponsiveShell> {
                     ),
                     if (width >= 1180) ...[
                       const SizedBox(width: 10),
-                      const Text(
-                        'OmniPulse AI',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: OmniPulseColors.textPrimaryDark,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'OmniPulse AI',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: OmniPulseColors.textPrimaryDark,
+                            ),
+                          ),
+                          Text(
+                            '${AppConstants.currentVersionTag} (Auto-OTA)',
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              color: OmniPulseColors.emeraldViral,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ],
@@ -97,7 +124,6 @@ class _MainResponsiveShellState extends State<MainResponsiveShell> {
       );
     }
 
-    // Android Mobil Görünümü: Tek elle kullanıma uygun BottomNavigationBar
     return Scaffold(
       body: _pages[_selectedIndex],
       bottomNavigationBar: NavigationBar(

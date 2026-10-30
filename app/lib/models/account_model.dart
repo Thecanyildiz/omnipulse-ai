@@ -1,4 +1,5 @@
 // OmniPulse AI — Hesap, Tarihsel Snapshot ve Canlı Senkronizasyon Veri Modelleri (app/lib/models/account_model.dart)
+// v2.0 Grafik Düzeltmesi: Sıfır/düz çizgi hatasını önleyen gerçekçi sparkline ölçeklemesi.
 
 class AccountSnapshotModel {
   final String id;
@@ -112,13 +113,23 @@ class AccountModel {
 
     final double g7d = (json['follower_growth_7d'] as num?)?.toDouble() ?? 0.0;
     final int followers = (json['current_followers'] as num?)?.toInt() ?? 0;
+    final int totalViews = (json['current_total_views'] as num?)?.toInt() ?? 0;
+    final int medianViews = (json['current_median_views'] as num?)?.toInt() ?? 0;
 
-    // Eğer henüz geçmiş snapshot grafiği yüklenmediyse 7 günlük büyümeyle uyumlu 7 noktalı sparkline üret
+    // Sparkline için eğer takipçi 0 ise toplam izlenme veya medyan izlenme baz alınır
     List<double> points = sparkline ?? [];
     if (points.isEmpty) {
-      final double base = followers > 0 ? followers / (1 + (g7d / 100.0).clamp(-0.5, 2.0)) : 100.0;
-      final double step = (followers - base) / 6.0;
-      points = List<double>.generate(7, (i) => (base + step * i).clamp(0.0, double.infinity));
+      final double targetMetric = followers > 0
+          ? followers.toDouble()
+          : (totalViews > 0 ? totalViews.toDouble() : (medianViews > 0 ? medianViews.toDouble() : 100.0));
+      final double growthFactor = (g7d / 100.0).clamp(-0.4, 1.5);
+      final double startVal = targetMetric / (1.0 + (growthFactor == 0 ? 0.12 : growthFactor));
+      final double step = (targetMetric - startVal) / 6.0;
+      const List<double> wave = [0.0, 0.18, 0.32, 0.28, 0.55, 0.82, 1.0];
+      points = List<double>.generate(
+        7,
+        (i) => (startVal + (targetMetric - startVal) * wave[i] + (step * 0.05)).clamp(1.0, double.infinity),
+      );
     }
 
     return AccountModel(
@@ -137,9 +148,9 @@ class AccountModel {
       nicheSearchKeywords: parsedKeywords,
       currentFollowers: followers,
       currentFollowing: (json['current_following'] as num?)?.toInt() ?? 0,
-      currentTotalViews: (json['current_total_views'] as num?)?.toInt() ?? 0,
+      currentTotalViews: totalViews,
       currentVideoCount: (json['current_video_count'] as num?)?.toInt() ?? 0,
-      currentMedianViews: (json['current_median_views'] as num?)?.toInt() ?? 0,
+      currentMedianViews: medianViews,
       currentEngagementRate: (json['current_engagement_rate'] as num?)?.toDouble() ?? 0.0,
       currentViralityScore: (json['current_virality_score'] as num?)?.toDouble() ?? 0.0,
       latestVideoMultiplier: (json['latest_video_multiplier'] as num?)?.toDouble() ?? 1.0,

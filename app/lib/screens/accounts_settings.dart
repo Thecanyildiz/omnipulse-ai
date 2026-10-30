@@ -1,12 +1,10 @@
-// OmniPulse AI — Ekran 5: Hesap Ekleme/Çıkarma (Mod A / Mod B) ve Bulut/API Ayarları (app/lib/screens/accounts_settings.dart)
-// Kullanıcının 15+ TikTok, Instagram ve YouTube hesabını kalıcı olarak eklediği,
-// Mod A (Şifresiz Açık Veri) veya Mod B (Derin API / OAuth / Session) seçtiği ve
-// Supabase + GitHub Actions bağlantılarını yapılandırdığı ekran.
+// OmniPulse AI — Ekran 5: Hesap Ekleme/Çıkarma (Mod A / Mod B), Otomatik Güncelleyici ve Bulut Ayarları (app/lib/screens/accounts_settings.dart)
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/auto_updater.dart';
 import '../core/constants.dart';
 import '../core/theme.dart';
 import '../providers/app_providers.dart';
@@ -20,21 +18,20 @@ class AccountsSettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _AccountsSettingsScreenState extends ConsumerState<AccountsSettingsScreen> {
-  // Hesap Ekleme Formu Değişkenleri
   String _selectedPlatform = 'tiktok';
   String _selectedCategory = AppConstants.defaultCategories.first;
-  String _selectedFetchMode = 'public_only'; // 'public_only' (Mod A) veya 'authorized_api' (Mod B)
+  String _selectedFetchMode = 'public_only';
   final TextEditingController _usernameCtrl = TextEditingController();
   final TextEditingController _tokenOrSessionCtrl = TextEditingController();
   final TextEditingController _secondaryIdCtrl = TextEditingController();
   bool _isSavingAccount = false;
 
-  // Bulut & API Bağlantı Ayarları Değişkenleri
   final TextEditingController _supabaseUrlCtrl = TextEditingController();
   final TextEditingController _supabaseKeyCtrl = TextEditingController();
   final TextEditingController _githubRepoCtrl = TextEditingController();
   final TextEditingController _githubTokenCtrl = TextEditingController();
   final TextEditingController _geminiKeyCtrl = TextEditingController();
+  bool _autoUpdateOnStartup = true;
 
   @override
   void initState() {
@@ -54,6 +51,7 @@ class _AccountsSettingsScreenState extends ConsumerState<AccountsSettingsScreen>
           prefs.getString(AppConstants.prefGithubRepo) ?? AppConstants.defaultGithubRepo;
       _githubTokenCtrl.text = prefs.getString(AppConstants.prefGithubToken) ?? '';
       _geminiKeyCtrl.text = prefs.getString(AppConstants.prefGeminiApiKey) ?? '';
+      _autoUpdateOnStartup = prefs.getBool(AppConstants.prefAutoUpdateEnabled) ?? true;
     });
   }
 
@@ -64,13 +62,14 @@ class _AccountsSettingsScreenState extends ConsumerState<AccountsSettingsScreen>
     await prefs.setString(AppConstants.prefGithubRepo, _githubRepoCtrl.text.trim());
     await prefs.setString(AppConstants.prefGithubToken, _githubTokenCtrl.text.trim());
     await prefs.setString(AppConstants.prefGeminiApiKey, _geminiKeyCtrl.text.trim());
+    await prefs.setBool(AppConstants.prefAutoUpdateEnabled, _autoUpdateOnStartup);
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         backgroundColor: OmniPulseColors.emeraldViral,
         content: Text(
-          'Bulut ve API bağlantı ayarları cihaza kaydedildi.',
+          'Bulut ve Otomatik Güncelleme ayarları kaydedildi.',
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700),
         ),
       ),
@@ -162,11 +161,80 @@ class _AccountsSettingsScreenState extends ConsumerState<AccountsSettingsScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Hesap Yönetimi (15+) & Bulut Ayarları'),
+        title: const Text('Hesap Yönetimi (15+) & Otomatik Güncelleyici'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // ===================================================================
+          // 0. OTOMATİK GITHUB OTA GÜNCELLEME KARTI
+          // ===================================================================
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  OmniPulseColors.aiViolet.withOpacity(0.18),
+                  OmniPulseColors.emeraldViral.withOpacity(0.12),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: OmniPulseColors.aiViolet.withOpacity(0.5)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(LucideIcons.refreshCw, color: OmniPulseColors.emeraldViral, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'GITHUB OTOMATİK GÜNCELLEYİCİ (${AppConstants.currentVersionTag})',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: OmniPulseColors.textPrimaryDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Switch(
+                      value: _autoUpdateOnStartup,
+                      activeColor: OmniPulseColors.emeraldViral,
+                      onChanged: (val) async {
+                        setState(() => _autoUpdateOnStartup = val);
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool(AppConstants.prefAutoUpdateEnabled, val);
+                      },
+                    ),
+                  ],
+                ),
+                const Text(
+                  'Açık olduğunda uygulama her açılışta GitHub Releases üzerindeki en yeni sürümü otomatik indirir, kurar ve yeniden başlatır.',
+                  style: TextStyle(fontSize: 12, color: OmniPulseColors.textSecondaryDark),
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      GitHubAutoUpdater.checkAndAutoUpdateOnStartup(
+                        context,
+                        forceManualCheck: true,
+                      );
+                    },
+                    icon: const Icon(Icons.cloud_download, size: 16),
+                    label: const Text('Şimdi Güncellemeleri Kontrol Et'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+
           // ===================================================================
           // 1. YENİ HESAP EKLEME FORMU (MOD A / MOD B SEÇİMLİ)
           // ===================================================================
@@ -195,8 +263,6 @@ class _AccountsSettingsScreenState extends ConsumerState<AccountsSettingsScreen>
                   ],
                 ),
                 const SizedBox(height: 14),
-
-                // Platform Seçici
                 SegmentedButton<String>(
                   segments: const [
                     ButtonSegment(value: 'tiktok', label: Text('TikTok')),
@@ -207,8 +273,6 @@ class _AccountsSettingsScreenState extends ConsumerState<AccountsSettingsScreen>
                   onSelectionChanged: (s) => setState(() => _selectedPlatform = s.first),
                 ),
                 const SizedBox(height: 14),
-
-                // Kullanıcı Adı ve Kategori
                 Row(
                   children: [
                     Expanded(
@@ -240,8 +304,6 @@ class _AccountsSettingsScreenState extends ConsumerState<AccountsSettingsScreen>
                   ],
                 ),
                 const SizedBox(height: 14),
-
-                // Veri Çekme Modu Seçici (Mod A vs Mod B)
                 const Text(
                   'Veri Çekme Modu Seçimi:',
                   style: TextStyle(
@@ -281,7 +343,6 @@ class _AccountsSettingsScreenState extends ConsumerState<AccountsSettingsScreen>
                     style: TextStyle(fontSize: 11.5, color: OmniPulseColors.textSecondaryDark),
                   ),
                 ),
-
                 if (_selectedFetchMode == 'authorized_api') ...[
                   const SizedBox(height: 8),
                   TextField(

@@ -1,10 +1,20 @@
-// OmniPulse AI — Sabitler ve Varsayılan Yapılandırma Anahtarları (app/lib/core/constants.dart)
+// OmniPulse AI — Sabitler, Sürüm Bilgileri ve Sayı Formatlayıcılar (app/lib/core/constants.dart)
 
 class AppConstants {
   AppConstants._();
 
   static const String appTitle = 'OmniPulse AI';
   static const String appSubtitle = 'Bulut Tabanlı Otonom Sosyal Medya Komuta Merkezi';
+
+  // Otomatik Güncelleyici (OTA Auto-Updater) için derleme zamanı sürüm sabitleri
+  static const int currentBuildNumber = int.fromEnvironment(
+    'APP_BUILD_NUMBER',
+    defaultValue: 1,
+  );
+  static const String currentVersionTag = String.fromEnvironment(
+    'APP_VERSION_TAG',
+    defaultValue: 'v1.0.1',
+  );
 
   // Derleme sırasında (--dart-define) gömülen veya Ayarlar ekranından değiştirilebilen varsayılanlar
   static const String defaultSupabaseUrl = String.fromEnvironment(
@@ -30,6 +40,8 @@ class AppConstants {
   static const String prefGithubBranch = 'omnipulse_github_branch';
   static const String prefGeminiApiKey = 'omnipulse_gemini_api_key';
   static const String prefThemeMode = 'omnipulse_theme_mode';
+  static const String prefAutoUpdateEnabled = 'omnipulse_auto_update_enabled';
+  static const String prefLastInstalledTag = 'omnipulse_last_installed_tag';
 
   // Responsive Kırılım Noktası (Mobil < 860px <= Masaüstü)
   static const double desktopBreakpoint = 860.0;
@@ -49,7 +61,7 @@ class AppConstants {
     'Motivasyon & Kişisel Gelişim',
   ];
 
-  /// Büyük sayıları okunabilir formata çevirir (Örn: 142500 -> "142.5K", 2400000 -> "2.4M")
+  /// Büyük sayıları okunabilir formata çevirir; küçük sayıları (0-999) tam sayı olarak net gösterir.
   static String formatCompactNumber(num value) {
     final double n = value.toDouble();
     if (n.abs() >= 1000000000) {
@@ -61,7 +73,7 @@ class AppConstants {
     if (n.abs() >= 1000) {
       return '${(n / 1000).toStringAsFixed(1)}K';
     }
-    return n.toInt().toString();
+    return n.round().toString();
   }
 
   /// Yüzde değişimini işaretli metin olarak döndürür (Örn: 14.2 -> "+%14.2")

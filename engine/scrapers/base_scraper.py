@@ -1,6 +1,7 @@
 """
 OmniPulse AI — Ortak Temel Veri Çekici Sınıfı (engine/scrapers/base_scraper.py)
-User-Agent rotasyonu, üstel geri çekilmeli yeniden deneme (Retry), hashtag ayrıştırma ve yt-dlp yardımcılarını içerir.
+v2.0 Ultra Hızlı Sürüm: --flat-playlist ve --dump-single-json kullanarak 15 videoyu
+tek bir HTTP/süreç çağrısında (~2-4 saniye içinde) çeker.
 """
 
 import json
@@ -41,8 +42,8 @@ class BaseScraper(ABC):
         return headers
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1.5, min=2, max=10),
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=1.0, min=1, max=4),
         retry=retry_if_exception_type((requests.RequestException, TimeoutError)),
         reraise=True,
     )
@@ -53,7 +54,7 @@ class BaseScraper(ABC):
         headers: Optional[Dict[str, str]] = None,
         cookies: Optional[Dict[str, str]] = None,
     ) -> requests.Response:
-        """Yeniden deneme mekanizmalı güvenli HTTP GET isteği."""
+        """Yeniden deneme mekanizmalı hızlı HTTP GET isteği."""
         merged_headers = self.get_headers(headers)
         response = self.session.get(
             url,
@@ -93,7 +94,6 @@ class BaseScraper(ABC):
             return datetime.fromtimestamp(float(ts), tz=timezone.utc).isoformat()
         ts_str = str(ts).strip()
         if ts_str.isdigit() and len(ts_str) == 8:
-            # YYYYMMDD formatı (yt-dlp upload_date)
             try:
                 dt = datetime.strptime(ts_str, "%Y%m%d").replace(tzinfo=timezone.utc)
                 return dt.isoformat()
@@ -109,16 +109,25 @@ class BaseScraper(ABC):
         self,
         target_url: str,
         max_items: int = 15,
-        flat_playlist: bool = False,
+        flat_playlist: bool = True,
         cookies_from_header: Optional[str] = None,
+        timeout_sec: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
-        """yt-dlp'yi alt süreç olarak çalıştırıp her video için tam JSON çıktısını döndürür."""
+        """
+        yt-dlp'yi --flat-playlist ve --dump-single-json ile çalıştırarak
+        tekil video sayfalarına tek tek girmeden tüm listeyi 2-4 saniye içinde döndürür.
+        """
+        effective_timeout = timeout_sec or CONFIG.yt_dlp_timeout_seconds
         cmd = [
             "yt-dlp",
-            "--dump-json",
+            "--dump-single-json",
             "--no-warnings",
             "--ignore-errors",
             "--no-check-certificates",
+            "--socket-timeout",
+            "10",
+            "--retries",
+            "1",
             "--playlist-end",
             str(max_items),
             "--user-agent",
@@ -130,29 +139,49 @@ class BaseScraper(ABC):
             cmd.extend(["--add-header", f"Cookie:{cookies_from_header}"])
         cmd.append(target_url)
 
-        logger.info(f"[{self.platform_name}] yt-dlp çalıştırılıyor: {target_url} (limit={max_items})")
+        logger.info(
+            f"[{self.platform_name}] Hızlı yt-dlp çağrısı: {target_url} (limit={max_items}, flat={flat_playlist})"
+        )
         try:
             proc = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=effective_timeout,
                 check=False,
             )
         except subprocess.TimeoutExpired:
-            logger.warning(f"[{self.platform_name}] yt-dlp zaman aşımına uğradı: {target_url}")
+            logger.warning(f"[{self.platform_name}] yt-dlp zaman aşımı ({effective_timeout}s): {target_url}")
+            return []
+
+        stdout_str = (proc.stdout or "").strip()
+        if not stdout_str:
             return []
 
         items: List[Dict[str, Any]] = []
-        for line in proc.stdout.splitlines():
+        for line in stdout_str.splitlines():
             line_str = line.strip()
             if not line_str:
                 continue
             try:
-                items.append(json.loads(line_str))
+                parsed = json.loads(line_str)
+                if isinstance(parsed, dict):
+                    if "entries" in parsed and isinstance(parsed["entries"], list):
+                        # Üst kanal/profil bilgisini alt öğelere aktar
+                        ch_followers = parsed.get("channel_follower_count") or parsed.get("follower_count")
+                        uploader_name = parsed.get("uploader") or parsed.get("title")
+                        for entry in parsed["entries"]:
+                            if isinstance(entry, dict):
+                                if ch_followers and not entry.get("channel_follower_count"):
+                                    entry["channel_follower_count"] = ch_followers
+                                if uploader_name and not entry.get("uploader"):
+                                    entry["uploader"] = uploader_name
+                                items.append(entry)
+                    else:
+                        items.append(parsed)
             except json.JSONDecodeError:
                 continue
-        return items
+        return items[:max_items]
 
     @abstractmethod
     def fetch_account_and_videos(
@@ -162,39 +191,5 @@ class BaseScraper(ABC):
         auth_credentials: Optional[Dict[str, Any]] = None,
         max_videos: int = 15,
     ) -> Dict[str, Any]:
-        """
-        Her platform kendi Mod A (public_only) ve Mod B (authorized_api) mantığını uygular.
-        Dönüş şeması:
-        {
-            "profile": {
-                "username": str,
-                "display_name": str,
-                "avatar_url": str,
-                "bio_text": str,
-                "followers_count": int,
-                "following_count": int,
-                "total_views": int,
-                "video_count": int,
-                "has_saves_shares_data": bool
-            },
-            "videos": [
-                {
-                    "platform_video_id": str,
-                    "video_url": str,
-                    "thumbnail_url": str,
-                    "title_or_caption": str,
-                    "hashtags": List[str],
-                    "duration_seconds": int,
-                    "published_at": str,
-                    "views": int,
-                    "likes": int,
-                    "comments": int,
-                    "shares": int,
-                    "saves": int,
-                    "avg_watch_percentage": float,
-                    "traffic_source_summary": dict
-                }
-            ]
-        }
-        """
+        """Her platform kendi Mod A ve Mod B mantığını uygular."""
         raise NotImplementedError

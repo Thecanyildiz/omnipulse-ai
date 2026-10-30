@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Özel Sürüm Etiketi (Örn: v1.2.0)'
+        description: 'Özel Sürüm Etiketi (Örn: v1.0.45)'
         required: false
         default: ''
         type: string
@@ -44,34 +44,37 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: 🔧 Android Platform Klasörünü Hazırla (Eksikse Oluştur & İzinleri Ekle)
+      - name: 🔧 Android Platform Klasörünü ve İzinleri Hazırla
         working-directory: ./app
         run: |
           if [ ! -d "android" ]; then
             flutter create --platforms=android --org com.omnipulse.ai --project-name omnipulse_ai .
           fi
-          # AndroidManifest.xml içerisine INTERNET izninin eklendiğinden emin ol
           MANIFEST_FILE="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST_FILE" ] && ! grep -q "android.permission.INTERNET" "$MANIFEST_FILE"; then
-            sed -i 's/<manifest[^>]*>/&\n    <uses-permission android:name="android.permission.INTERNET"\/>/' "$MANIFEST_FILE"
+            sed -i 's/<manifest[^>]*>/&\n    <uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"\/>/' "$MANIFEST_FILE"
           fi
 
       - name: 📦 Flutter Paketlerini İndir
         working-directory: ./app
         run: flutter pub get
 
-      - name: 🏗️ Android APK Derle (Release + Dart Define Gömülü Değişkenler)
+      - name: 🏗️ Android APK Derle (Otomatik Sürüm Numarası Gömülü)
         working-directory: ./app
         run: |
           flutter build apk --release \
+            --build-number=${{ github.run_number }} \
+            --build-name=1.0.${{ github.run_number }} \
+            --dart-define=APP_BUILD_NUMBER=${{ github.run_number }} \
+            --dart-define=APP_VERSION_TAG=v1.0.${{ github.run_number }} \
             --dart-define=DEFAULT_SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=DEFAULT_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_KEY }} \
             --dart-define=DEFAULT_GITHUB_REPO=${{ github.repository }}
 
-      - name: 📤 OmniPulse-Android.apk Dosyasını Hazırla ve Yükle
+      - name: 📤 OmniPulse-Android.apk Dosyasını Hazırla
         run: |
           cp app/build/app/outputs/flutter-apk/app-release.apk ./OmniPulse-Android.apk
-        
+
       - name: 📦 Android Artifact Kaydet
         uses: actions/upload-artifact@v4
         with:
@@ -110,10 +113,14 @@ jobs:
         working-directory: ./app
         run: flutter pub get
 
-      - name: 🏗️ Windows Release (.exe) Derle
+      - name: 🏗️ Windows Release (.exe) Derle (Otomatik Sürüm Numarası Gömülü)
         working-directory: ./app
         run: |
           flutter build windows --release `
+            --build-number=${{ github.run_number }} `
+            --build-name=1.0.${{ github.run_number }} `
+            --dart-define=APP_BUILD_NUMBER=${{ github.run_number }} `
+            --dart-define=APP_VERSION_TAG=v1.0.${{ github.run_number }} `
             --dart-define=DEFAULT_SUPABASE_URL=${{ secrets.SUPABASE_URL }} `
             --dart-define=DEFAULT_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_KEY }} `
             --dart-define=DEFAULT_GITHUB_REPO=${{ github.repository }}
@@ -131,7 +138,7 @@ jobs:
           retention-days: 14
 
   # ==========================================================================
-  # 3. GITHUB RELEASES YAYINLAMA İŞİ
+  # 3. GITHUB RELEASES YAYINLAMA İŞİ (OTA Auto-Updater Tarafından Okunur)
   # ==========================================================================
   publish-github-release:
     name: 🚀 Publish APK & Windows EXE to GitHub Releases
@@ -164,14 +171,14 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version_tag.outputs.TAG }}
-          name: "OmniPulse AI ${{ steps.version_tag.outputs.TAG }} (Android .APK & Windows .EXE)"
+          name: "OmniPulse AI ${{ steps.version_tag.outputs.TAG }} (Auto-Update Build #${{ github.run_number }})"
           body: |
-            ## 🚀 OmniPulse AI — Otomatik Derlenen Kurulum Paketleri
+            ## 🚀 OmniPulse AI — Otomatik Güncellenen Kurulum Paketleri (Build #${{ github.run_number }})
             
-            Bilgisayarınıza hiçbir derleyici kurmadan doğrudan aşağıdaki dosyaları indirip kullanabilirsiniz:
+            Uygulamanız açıldığında bu sürümü otomatik olarak algılar, indirir ve kurar.
             
-            * 📱 **Android Telefon Kurulumu:** `OmniPulse-Android.apk` dosyasını telefonunuza indirip kurun.
-            * 🖥️ **Windows Masaüstü Kurulumu:** `OmniPulse-Windows.zip` dosyasını indirip klasöre çıkarın ve `omnipulse_ai.exe` dosyasını çalıştırın.
+            * 📱 **Android Telefon Kurulumu:** `OmniPulse-Android.apk`
+            * 🖥️ **Windows Masaüstü Kurulumu:** `OmniPulse-Windows.zip`
           files: |
             ./release_assets/OmniPulse-Android.apk
             ./release_assets/OmniPulse-Windows.zip

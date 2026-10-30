@@ -1,6 +1,7 @@
 // OmniPulse AI — Hesap Kartı ve 7 Günlük Mini Çizgi Grafik (app/lib/widgets/sparkline_card.dart)
-// Avatar, platform ikonu, takipçi sayısı, fl_chart Sparkline, sağlık rozeti ve son video çarpanını içerir.
+// v2.0 Grafik Düzeltmesi: preventCurveOverShooting: true ve dinamik min/max aralığı ile taşmasız mini grafik.
 
+import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
@@ -27,10 +28,17 @@ class SparklineAccountCard extends StatelessWidget {
 
     final List<double> points = account.recentSparklinePoints.isNotEmpty
         ? account.recentSparklinePoints
-        : [100, 102, 104, 103, 108, 112, 115];
+        : [80, 88, 92, 90, 104, 112, 120];
 
-    final double minY = points.reduce((a, b) => a < b ? a : b) * 0.98;
-    final double maxY = points.reduce((a, b) => a > b ? a : b) * 1.02;
+    final double rawMin = points.reduce(math.min);
+    final double rawMax = points.reduce(math.max);
+    final double span = math.max(rawMax - rawMin, rawMax * 0.1 + 1.0);
+    final double minY = math.max(0.0, rawMin - span * 0.15);
+    final double maxY = rawMax + span * 0.15;
+
+    final bool showViewsPrimary = account.currentFollowers == 0 && account.currentTotalViews > 0;
+    final String primaryLabel = showViewsPrimary ? 'Toplam İzlenme' : 'Takipçi';
+    final int primaryVal = showViewsPrimary ? account.currentTotalViews : account.currentFollowers;
 
     return InkWell(
       onTap: onTap,
@@ -109,7 +117,7 @@ class SparklineAccountCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
 
-            // Orta Satır: Takipçi Sayısı + 7 Günlük Sparkline Grafiği
+            // Orta Satır: Ana Metrik + 7 Günlük Sparkline Grafiği
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -118,16 +126,16 @@ class SparklineAccountCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Takipçi',
-                        style: TextStyle(
+                      Text(
+                        primaryLabel,
+                        style: const TextStyle(
                           fontSize: 11.5,
                           color: OmniPulseColors.textSecondaryDark,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        AppConstants.formatCompactNumber(account.currentFollowers),
+                        AppConstants.formatCompactNumber(primaryVal),
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
@@ -136,7 +144,9 @@ class SparklineAccountCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       GrowthPercentBadge(
-                        growthPercent: account.followerGrowth7d,
+                        growthPercent: showViewsPrimary
+                            ? account.viewsGrowth7d
+                            : account.followerGrowth7d,
                         suffixLabel: '7g',
                       ),
                     ],
@@ -154,8 +164,8 @@ class SparklineAccountCard extends StatelessWidget {
                         borderData: FlBorderData(show: false),
                         minX: 0,
                         maxX: (points.length - 1).toDouble(),
-                        minY: minY == maxY ? minY - 1 : minY,
-                        maxY: minY == maxY ? maxY + 1 : maxY,
+                        minY: minY,
+                        maxY: maxY,
                         lineTouchData: const LineTouchData(enabled: false),
                         lineBarsData: [
                           LineChartBarData(
@@ -164,8 +174,10 @@ class SparklineAccountCard extends StatelessWidget {
                               (i) => FlSpot(i.toDouble(), points[i]),
                             ),
                             isCurved: true,
+                            curveSmoothness: 0.28,
+                            preventCurveOverShooting: true,
                             color: lineColor,
-                            barWidth: 2.4,
+                            barWidth: 2.5,
                             isStrokeCapRound: true,
                             dotData: const FlDotData(show: false),
                             belowBarData: BarAreaData(
@@ -184,7 +196,7 @@ class SparklineAccountCard extends StatelessWidget {
             const Divider(height: 1),
             const SizedBox(height: 10),
 
-            // Alt Satır: Sağlık Rozeti + Etkileşim Oranı + Viralite Puanı
+            // Alt Satır: Sağlık Rozeti + Medyan İzlenme + Viralite Puanı
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -204,7 +216,7 @@ class SparklineAccountCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'ER: %${account.currentEngagementRate.toStringAsFixed(1)}  •  Viral: ${account.currentViralityScore.toStringAsFixed(0)}/100',
+                  'Medyan: ${AppConstants.formatCompactNumber(account.currentMedianViews)}  •  ER: %${account.currentEngagementRate.toStringAsFixed(1)}',
                   style: const TextStyle(
                     fontSize: 11.5,
                     color: OmniPulseColors.textSecondaryDark,
