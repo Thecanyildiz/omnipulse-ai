@@ -9,15 +9,15 @@ class AppConstants {
   // Derleme sırasında (--dart-define) gömülen veya Ayarlar ekranından değiştirilebilen varsayılanlar
   static const String defaultSupabaseUrl = String.fromEnvironment(
     'DEFAULT_SUPABASE_URL',
-    defaultValue: '',
+    defaultValue: 'https://riorunykrmzzlpwqpzyi.supabase.co',
   );
   static const String defaultSupabaseAnonKey = String.fromEnvironment(
     'DEFAULT_SUPABASE_ANON_KEY',
-    defaultValue: '',
+    defaultValue: 'sb_publishable_ZQ8iwJo821rxAA5MzKwIZg_ERIZ1S94',
   );
   static const String defaultGithubRepo = String.fromEnvironment(
     'DEFAULT_GITHUB_REPO',
-    defaultValue: 'kullanici/omnipulse-ai',
+    defaultValue: 'Thecanyildiz/omnipulse-ai',
   );
   static const String defaultGithubWorkflowFile = 'cloud_sync_engine.yml';
   static const String defaultGithubBranch = 'main';
