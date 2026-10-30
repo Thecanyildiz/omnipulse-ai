@@ -10,8 +10,12 @@ import time
 import logging
 from dataclasses import dataclass, field
 from typing import List
+from pathlib import Path
 from dotenv import load_dotenv
 
+_env_path = Path(__file__).resolve().parent / ".env"
+if _env_path.is_file():
+    load_dotenv(dotenv_path=_env_path)
 load_dotenv()
 
 logging.basicConfig(

@@ -28,7 +28,18 @@ class GeminiStrategistService:
     def __init__(self, api_key: str = "", model_name: str = "") -> None:
         self.api_key = api_key or CONFIG.gemini_api_key
         self.model_name = model_name or CONFIG.gemini_model_name
-        self.client = genai.Client(api_key=self.api_key) if self.api_key else None
+        if self.api_key:
+            self.client = genai.Client(
+                api_key=self.api_key,
+                http_options=types.HttpOptions(timeout=10000),
+            )
+            # 429 kota aşımlarında 15 saat beklemek yerine hemen yerel matematiksel stratejiye geç
+            import tenacity
+            self.client._api_client._retry = tenacity.Retrying(
+                stop=tenacity.stop_after_attempt(1), reraise=True
+            )
+        else:
+            self.client = None
 
     # =========================================================================
     # AŞAMA 1: Otonom Niş Tespiti ve 5 Arama Sorgusu Üretimi

@@ -1,3 +1,7 @@
+import html
+import re
+import requests
+import requests
 """
 OmniPulse AI — Instagram Hibrit Veri Çekici (engine/scrapers/instagram_scraper.py)
 Mod A (public_only): Instaloader ve Instagram açık web profil uç noktası ile
@@ -324,6 +328,81 @@ class InstagramScraper(BaseScraper):
             "videos": [],
         }
 
+    
+    @staticmethod
+    def _parse_k_number(s: Optional[str]) -> int:
+        if not s:
+            return 0
+        cleaned = s.lower().replace(",", ".").strip()
+        try:
+            if "k" in cleaned:
+                return int(float(cleaned.replace("k", "")) * 1000)
+            if "m" in cleaned:
+                return int(float(cleaned.replace("m", "")) * 1000000)
+            return int(float(cleaned))
+        except Exception:
+            return 0
+
+    def _fetch_via_public_og_meta(self, clean_username: str) -> Dict[str, Any]:
+        """Instagram açık profilinden og:description ve og:image üzerinden takipçi ve post sayılarını çeker."""
+        clean = clean_username.strip().lstrip("@")
+        headers = {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        followers = 0
+        following = 0
+        posts = 0
+        display_name = clean
+        avatar_url = ""
+        bio_text = ""
+
+        try:
+            resp = requests.get(f"https://www.instagram.com/{clean}/", headers=headers, timeout=8)
+            html_text = resp.text
+
+            m_desc = re.findall(r'<meta property="og:description" content="([^"]+)"', html_text)
+            if m_desc:
+                desc_text = html.unescape(m_desc[0])
+                m_f = re.search(r'([0-9\.,]+[kmbn]?)\s*Followers', desc_text, re.IGNORECASE)
+                m_fl = re.search(r'([0-9\.,]+[kmbn]?)\s*Following', desc_text, re.IGNORECASE)
+                m_p = re.search(r'([0-9\.,]+[kmbn]?)\s*Posts', desc_text, re.IGNORECASE)
+                if m_f:
+                    followers = self._parse_k_number(m_f.group(1))
+                if m_fl:
+                    following = self._parse_k_number(m_fl.group(1))
+                if m_p:
+                    posts = self._parse_k_number(m_p.group(1))
+
+            m_img = re.findall(r'<meta property="og:image" content="([^"]+)"', html_text)
+            if m_img:
+                avatar_url = html.unescape(m_img[0])
+
+            m_title = re.findall(r'<meta property="og:title" content="([^"]+)"', html_text)
+            if m_title:
+                title_str = html.unescape(m_title[0])
+                m_name = re.match(r'^(.*?)\s*\(@', title_str)
+                if m_name and m_name.group(1).strip():
+                    display_name = m_name.group(1).strip()
+        except Exception as exc:
+            logger.debug(f"[Instagram OG Meta] @{clean} ayrıştırma hatası: {exc}")
+
+        return {
+            "profile": {
+                "username": clean,
+                "display_name": display_name,
+                "avatar_url": avatar_url,
+                "bio_text": bio_text,
+                "followers_count": followers,
+                "following_count": following,
+                "total_views": 0,
+                "video_count": posts,
+                "has_saves_shares_data": False,
+            },
+            "videos": [],
+        }
+
     def fetch_account_and_videos(
         self,
         username: str,
@@ -345,14 +424,19 @@ class InstagramScraper(BaseScraper):
             if graph_bundle and graph_bundle["videos"]:
                 return graph_bundle
 
-        insta_bundle = self._fetch_via_instaloader(
-            clean_user, session_id=session_id, max_videos=max_videos
-        )
-        if insta_bundle and (
-            insta_bundle["videos"] or insta_bundle["profile"]["followers_count"] > 0
-        ):
-            return insta_bundle
+        # 1. Önce Instagram açık web profilinden (og:meta) anında (~0.5 sn) gerçek takipçi ve post sayısını al
+        og_bundle = self._fetch_via_public_og_meta(clean_user)
 
-        return self._fetch_via_web_json_fallback(
-            clean_user, session_id=session_id, max_videos=max_videos
-        )
+        # 2. Session ID verilmişse veya Mod B ise Instaloader / Web JSON ile Reels videolarını çek
+        if session_id:
+            insta_bundle = self._fetch_via_instaloader(
+                clean_user, session_id=session_id, max_videos=max_videos
+            )
+            if insta_bundle and insta_bundle.get("videos"):
+                if og_bundle["profile"]["followers_count"] > 0 and insta_bundle["profile"]["followers_count"] == 0:
+                    insta_bundle["profile"]["followers_count"] = og_bundle["profile"]["followers_count"]
+                if og_bundle["profile"]["avatar_url"] and not insta_bundle["profile"]["avatar_url"]:
+                    insta_bundle["profile"]["avatar_url"] = og_bundle["profile"]["avatar_url"]
+                return insta_bundle
+
+        return og_bundle

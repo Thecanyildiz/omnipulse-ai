@@ -4,6 +4,7 @@ Tüm CRUD işlemlerini, zaman serisi snapshot kayıtlarını ve sync_jobs Realti
 """
 
 import logging
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from supabase import Client, create_client
@@ -17,11 +18,17 @@ class SupabaseDBClient:
     """Supabase PostgreSQL tabloları ile iletişim kuran üretim sınıfı."""
 
     def __init__(self, supabase_url: Optional[str] = None, supabase_key: Optional[str] = None) -> None:
-        url = supabase_url or CONFIG.supabase_url
-        key = supabase_key or CONFIG.supabase_key
-        if not url or not key:
+        self.url = supabase_url or CONFIG.supabase_url
+        self.key = supabase_key or CONFIG.supabase_key
+        if not self.url or not self.key:
             raise ValueError("Supabase URL ve Key değerleri boş olamaz.")
-        self.client: Client = create_client(url, key)
+        self._local = threading.local()
+
+    @property
+    def client(self) -> Client:
+        if not hasattr(self._local, "client") or self._local.client is None:
+            self._local.client = create_client(self.url, self.key)
+        return self._local.client
 
     # =========================================================================
     # 1. CANLI SENKRONİZASYON İŞ TAKİBİ (sync_jobs)

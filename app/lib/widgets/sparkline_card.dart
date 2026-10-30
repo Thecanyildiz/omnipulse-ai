@@ -21,20 +21,24 @@ class SparklineAccountCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color lineColor = account.followerGrowth7d >= 0
-        ? OmniPulseColors.emeraldViral
-        : OmniPulseColors.coralCritical;
-    final Color healthColor = OmniPulseColors.tierColor(account.healthStatus);
-
     final List<double> points = account.recentSparklinePoints.isNotEmpty
         ? account.recentSparklinePoints
-        : [80, 88, 92, 90, 104, 112, 120];
+        : const [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
 
     final double rawMin = points.reduce(math.min);
     final double rawMax = points.reduce(math.max);
-    final double span = math.max(rawMax - rawMin, rawMax * 0.1 + 1.0);
-    final double minY = math.max(0.0, rawMin - span * 0.15);
-    final double maxY = rawMax + span * 0.15;
+    final bool allZeros = rawMax == 0.0 && rawMin == 0.0;
+
+    final Color lineColor = allZeros
+        ? OmniPulseColors.borderDark
+        : (account.followerGrowth7d >= 0
+            ? OmniPulseColors.emeraldViral
+            : OmniPulseColors.coralCritical);
+    final Color healthColor = OmniPulseColors.tierColor(account.healthStatus);
+
+    final double span = allZeros ? 5.0 : math.max(rawMax - rawMin, rawMax * 0.1 + 1.0);
+    final double minY = 0.0;
+    final double maxY = allZeros ? 5.0 : (rawMax + span * 0.15);
 
     final bool showViewsPrimary = account.currentFollowers == 0 && account.currentTotalViews > 0;
     final String primaryLabel = showViewsPrimary ? 'Toplam İzlenme' : 'Takipçi';

@@ -116,20 +116,24 @@ class AccountModel {
     final int totalViews = (json['current_total_views'] as num?)?.toInt() ?? 0;
     final int medianViews = (json['current_median_views'] as num?)?.toInt() ?? 0;
 
-    // Sparkline için eğer takipçi 0 ise toplam izlenme veya medyan izlenme baz alınır
+    // Sparkline için eğer metrikler tamamen 0 ise yapay eğri çizilmez, net 0 tabanı verilir
     List<double> points = sparkline ?? [];
     if (points.isEmpty) {
-      final double targetMetric = followers > 0
-          ? followers.toDouble()
-          : (totalViews > 0 ? totalViews.toDouble() : (medianViews > 0 ? medianViews.toDouble() : 100.0));
-      final double growthFactor = (g7d / 100.0).clamp(-0.4, 1.5);
-      final double startVal = targetMetric / (1.0 + (growthFactor == 0 ? 0.12 : growthFactor));
-      final double step = (targetMetric - startVal) / 6.0;
-      const List<double> wave = [0.0, 0.18, 0.32, 0.28, 0.55, 0.82, 1.0];
-      points = List<double>.generate(
-        7,
-        (i) => (startVal + (targetMetric - startVal) * wave[i] + (step * 0.05)).clamp(1.0, double.infinity),
-      );
+      if (followers == 0 && totalViews == 0 && medianViews == 0) {
+        points = List<double>.filled(7, 0.0);
+      } else {
+        final double targetMetric = followers > 0
+            ? followers.toDouble()
+            : (totalViews > 0 ? totalViews.toDouble() : medianViews.toDouble());
+        final double growthFactor = (g7d / 100.0).clamp(-0.4, 1.5);
+        final double startVal = targetMetric / (1.0 + (growthFactor == 0 ? 0.12 : growthFactor));
+        final double step = (targetMetric - startVal) / 6.0;
+        const List<double> wave = [0.0, 0.18, 0.32, 0.28, 0.55, 0.82, 1.0];
+        points = List<double>.generate(
+          7,
+          (i) => (startVal + (targetMetric - startVal) * wave[i] + (step * 0.05)).clamp(0.0, double.infinity),
+        );
+      }
     }
 
     return AccountModel(

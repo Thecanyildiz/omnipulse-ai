@@ -128,6 +128,26 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
         ? math.max(currentTotalViews.toDouble(), widget.account.currentMedianViews.toDouble())
         : currentFollowers.toDouble();
 
+    if (endValue <= 0.0) {
+      // Metrik henüz 0 ise asla yapay 1'den 0'a düşen çizgi çizme; düz 0 tabanı ver!
+      return List<_ChartPoint>.generate(
+        bucketCount,
+        (i) {
+          final double progress = i / (bucketCount - 1);
+          final DateTime pointTime = cutoff.add(
+            Duration(seconds: (windowDuration.inSeconds * progress).round()),
+          );
+          return _ChartPoint(
+            timestamp: pointTime,
+            value: 0.0,
+            label: axisFormat.format(pointTime),
+            tooltipDetail:
+                '${DateFormat('dd MMM HH:mm').format(pointTime)}\n${_selectedMetric == 'views' ? 'İzlenme' : 'Takipçi'}: 0',
+          );
+        },
+      );
+    }
+
     // Pencereye göre başlangıç oranı ('24h' daha dar değişim, '7d' orta, '30d' geniş kümülatif büyüme)
     final double windowSpreadRatio;
     if (_selectedWindow == '24h') {
@@ -138,7 +158,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
       windowSpreadRatio = 0.68; // Son 30 günde %68'lik dilim
     }
 
-    final double startValue = math.max(1.0, endValue * (1.0 - windowSpreadRatio));
+    final double startValue = math.max(0.0, endValue * (1.0 - windowSpreadRatio));
     final List<_ChartPoint> generated = [];
 
     for (int i = 0; i < bucketCount; i++) {
