@@ -70,6 +70,15 @@ class OmniPulseOrchestrator:
         existing_videos_map = self.db.get_existing_videos_for_account(account_id)
         historical_snapshots = self.db.get_account_snapshots_since(account_id, days_back=35)
 
+        # Eğer yeni video çekilemediyse (örneğin rate limit veya bulut çalıştırıcısı) fakat
+        # veritabanında mevcut videolar varsa, veritabanındaki videoları ve metrikleri koru!
+        if not raw_videos and existing_videos_map:
+            logger.warning(
+                f"[{platform.upper()}] @{username} yeni video çekilemedi; veritabanındaki "
+                f"{len(existing_videos_map)} adet mevcut video korunuyor."
+            )
+            raw_videos = list(existing_videos_map.values())
+
         # 3. Matematiksel Analiz Motorunu Çalıştır
         has_saves_shares = bool(profile_data.get("has_saves_shares_data", platform == "tiktok"))
         math_summary = MathEngine.enrich_account_videos(
@@ -78,23 +87,28 @@ class OmniPulseOrchestrator:
             has_saves_shares=has_saves_shares,
         )
         enriched_videos = math_summary["videos"]
-        median_views = math_summary["median_views"]
-        avg_er = math_summary["avg_engagement_rate"]
-        avg_virality = math_summary["avg_virality_score"]
+        median_views = math_summary["median_views"] or int(account.get("current_median_views") or 0)
+        avg_er = math_summary["avg_engagement_rate"] or float(account.get("current_engagement_rate") or 0.0)
+        avg_virality = math_summary["avg_virality_score"] or float(account.get("current_virality_score") or 0.0)
         latest_multiplier = math_summary["latest_video_multiplier"]
         optimal_best_hour = math_summary["optimal_best_hour"]
 
         current_followers = int(
-            profile_data.get("followers_count") or account.get("current_followers") or 0
+            profile_data.get("followers_count")
+            or account.get("current_followers")
+            or 0
         )
         current_total_views = int(
             profile_data.get("total_views")
-            or sum(v["views"] for v in enriched_videos)
+            or sum(v.get("views", 0) for v in enriched_videos)
             or account.get("current_total_views")
             or 0
         )
         current_video_count = int(
-            profile_data.get("video_count") or len(enriched_videos)
+            profile_data.get("video_count")
+            or len(enriched_videos)
+            or account.get("current_video_count")
+            or 0
         )
 
         # 4. 24s / 7g / 30g Büyüme Yüzdelerini ve Sağlık Durumunu Hesapla
