@@ -1,0 +1,70 @@
+name: OmniPulse Cloud Sync & Autonomous AI Engine
+
+on:
+  schedule:
+    # Her 6 saatte bir otomatik bulut senkronizasyonu (00:00, 06:00, 12:00, 18:00 UTC)
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      triggered_by:
+        description: 'Tetikleyen Cihaz (mobile_app / desktop_app / manual_cli)'
+        required: false
+        default: 'mobile_app'
+        type: string
+      target_account_id:
+        description: 'Tekil Hesap UUID (Boş bırakılırsa aktif tüm hesaplar taranır)'
+        required: false
+        default: ''
+        type: string
+      sync_job_id:
+        description: 'Uygulama tarafından önceden oluşturulan sync_jobs UUID (Opsiyonel)'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: omnipulse-cloud-sync-${{ github.event.inputs.target_account_id || 'all-accounts' }}
+  cancel-in-progress: false
+
+jobs:
+  run-omnipulse-engine:
+    name: Scrape, Analyze & Generate Autonomous AI Strategy
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: 📥 Kaynak Kodunu Çek (Checkout Repository)
+        uses: actions/checkout@v4
+
+      - name: 🐍 Python 3.11 Kurulumu ve Pip Önbelleği
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'engine/requirements.txt'
+
+      - name: 🛠️ Sistem Bağımlılıkları ve FFmpeg/Deno Kurulumu (yt-dlp için)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg curl jq
+
+      - name: 📦 Python Paketlerini ve En Güncel yt-dlp Sürümünü Yükle
+        working-directory: ./engine
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install --upgrade yt-dlp instaloader
+
+      - name: 🚀 OmniPulse Bulut Veri Çekme ve Otonom AI Motorunu Çalıştır
+        working-directory: ./engine
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          TRIGGERED_BY: ${{ github.event_name == 'schedule' && 'cron_schedule' || github.event.inputs.triggered_by || 'mobile_app' }}
+          TARGET_ACCOUNT_ID: ${{ github.event.inputs.target_account_id || '' }}
+          SYNC_JOB_ID: ${{ github.event.inputs.sync_job_id || '' }}
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python main.py

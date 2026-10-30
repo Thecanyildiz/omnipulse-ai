@@ -1,0 +1,181 @@
+name: Build & Release OmniPulse Android (.apk) & Windows (.exe)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'app/**'
+      - '.github/workflows/build_releases.yml'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Özel Sürüm Etiketi (Örn: v1.2.0)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  # ==========================================================================
+  # 1. ANDROID APK DERLEME İŞİ (Ubuntu Runner)
+  # ==========================================================================
+  build-android-apk:
+    name: 📱 Build Android Release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 📥 Kaynak Kodunu Çek
+        uses: actions/checkout@v4
+
+      - name: ☕ Java 17 Kurulumu
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 💙 Flutter SDK Kurulumu (Stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: 🔧 Android Platform Klasörünü Hazırla (Eksikse Oluştur & İzinleri Ekle)
+        working-directory: ./app
+        run: |
+          if [ ! -d "android" ]; then
+            flutter create --platforms=android --org com.omnipulse.ai --project-name omnipulse_ai .
+          fi
+          # AndroidManifest.xml içerisine INTERNET izninin eklendiğinden emin ol
+          MANIFEST_FILE="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST_FILE" ] && ! grep -q "android.permission.INTERNET" "$MANIFEST_FILE"; then
+            sed -i 's/<manifest[^>]*>/&\n    <uses-permission android:name="android.permission.INTERNET"\/>/' "$MANIFEST_FILE"
+          fi
+
+      - name: 📦 Flutter Paketlerini İndir
+        working-directory: ./app
+        run: flutter pub get
+
+      - name: 🏗️ Android APK Derle (Release + Dart Define Gömülü Değişkenler)
+        working-directory: ./app
+        run: |
+          flutter build apk --release \
+            --dart-define=DEFAULT_SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+            --dart-define=DEFAULT_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_KEY }} \
+            --dart-define=DEFAULT_GITHUB_REPO=${{ github.repository }}
+
+      - name: 📤 OmniPulse-Android.apk Dosyasını Hazırla ve Yükle
+        run: |
+          cp app/build/app/outputs/flutter-apk/app-release.apk ./OmniPulse-Android.apk
+        
+      - name: 📦 Android Artifact Kaydet
+        uses: actions/upload-artifact@v4
+        with:
+          name: OmniPulse-Android-APK
+          path: ./OmniPulse-Android.apk
+          retention-days: 14
+
+  # ==========================================================================
+  # 2. WINDOWS MASAÜSTÜ (.EXE) DERLEME İŞİ (Windows Runner)
+  # ==========================================================================
+  build-windows-exe:
+    name: 🖥️ Build Windows Desktop Release (.zip)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 📥 Kaynak Kodunu Çek
+        uses: actions/checkout@v4
+
+      - name: 💙 Flutter SDK Kurulumu (Stable - Windows)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: 🔧 Windows Masaüstü Desteğini Etkinleştir ve Platformu Hazırla
+        working-directory: ./app
+        shell: powershell
+        run: |
+          flutter config --enable-windows-desktop
+          if (!(Test-Path -Path "windows")) {
+            flutter create --platforms=windows --project-name omnipulse_ai .
+          }
+
+      - name: 📦 Flutter Paketlerini İndir
+        working-directory: ./app
+        run: flutter pub get
+
+      - name: 🏗️ Windows Release (.exe) Derle
+        working-directory: ./app
+        run: |
+          flutter build windows --release `
+            --dart-define=DEFAULT_SUPABASE_URL=${{ secrets.SUPABASE_URL }} `
+            --dart-define=DEFAULT_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_KEY }} `
+            --dart-define=DEFAULT_GITHUB_REPO=${{ github.repository }}
+
+      - name: 🗜️ Derlenen Windows Uygulamasını OmniPulse-Windows.zip Olarak Paketle
+        shell: powershell
+        run: |
+          Compress-Archive -Path "app/build/windows/x64/runner/Release/*" -DestinationPath "./OmniPulse-Windows.zip" -Force
+
+      - name: 📦 Windows Artifact Kaydet
+        uses: actions/upload-artifact@v4
+        with:
+          name: OmniPulse-Windows-ZIP
+          path: ./OmniPulse-Windows.zip
+          retention-days: 14
+
+  # ==========================================================================
+  # 3. GITHUB RELEASES YAYINLAMA İŞİ
+  # ==========================================================================
+  publish-github-release:
+    name: 🚀 Publish APK & Windows EXE to GitHub Releases
+    needs: [build-android-apk, build-windows-exe]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Android APK Artifact İndir
+        uses: actions/download-artifact@v4
+        with:
+          name: OmniPulse-Android-APK
+          path: ./release_assets
+
+      - name: 📥 Windows ZIP Artifact İndir
+        uses: actions/download-artifact@v4
+        with:
+          name: OmniPulse-Windows-ZIP
+          path: ./release_assets
+
+      - name: 🏷️ Sürüm Etiketini Belirle
+        id: version_tag
+        run: |
+          if [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            echo "TAG=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "TAG=v1.0.${{ github.run_number }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 🎉 GitHub Releases Sekmesine APK ve EXE Yükle
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version_tag.outputs.TAG }}
+          name: "OmniPulse AI ${{ steps.version_tag.outputs.TAG }} (Android .APK & Windows .EXE)"
+          body: |
+            ## 🚀 OmniPulse AI — Otomatik Derlenen Kurulum Paketleri
+            
+            Bilgisayarınıza hiçbir derleyici kurmadan doğrudan aşağıdaki dosyaları indirip kullanabilirsiniz:
+            
+            * 📱 **Android Telefon Kurulumu:** `OmniPulse-Android.apk` dosyasını telefonunuza indirip kurun.
+            * 🖥️ **Windows Masaüstü Kurulumu:** `OmniPulse-Windows.zip` dosyasını indirip klasöre çıkarın ve `omnipulse_ai.exe` dosyasını çalıştırın.
+          files: |
+            ./release_assets/OmniPulse-Android.apk
+            ./release_assets/OmniPulse-Windows.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
