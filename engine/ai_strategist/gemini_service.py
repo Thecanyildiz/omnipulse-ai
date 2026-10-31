@@ -253,10 +253,21 @@ class GeminiStrategistService:
             verdict = verdict_map.get(tier, "UNDERPERFORMING")
 
             if mult >= 1.3:
-                headline = f"Kanal medyanının {mult}x üstünde: Kaydetme (%{saves_rate}) ve Paylaşım (%{shares_rate}) keşfeti tetikledi."
+                if saves > 0 or shares > 0:
+                    headline = f"Kanal medyanının {mult}x üstünde: Kaydetme (%{saves_rate}) ve Paylaşım (%{shares_rate}) keşfeti tetikledi."
+                elif likes > 0:
+                    headline = f"Kanal medyanının {mult}x üstünde: {views:,} izlenme ve %{likes_rate} beğeni ivmesiyle keşfete çıktı."
+                else:
+                    headline = f"Kanal medyanının {mult}x üstünde: Algoritma geniş kitle testi başlattı ({views:,} izlenme)."
                 action = f"Bu videonun {dur or avg_winning_duration} saniyelik kurgusunu ve ilk 3 saniye kancasını serinin 2. bölümünde tekrarlayın."
+            elif mult >= 0.7:
+                headline = f"Kanal medyanı bandında ({mult}x): Düzenli organik akış performansı sağlandı ({views:,} izlenme)."
+                action = f"Kanca merak boşluğunu biraz daha keskinleştirerek süreyi {avg_winning_duration} saniye bandında tutun."
             else:
-                headline = f"Medyanın {mult}x katında kaldı: Düşük kaydetme (%{saves_rate}) ve süre sapması akışı kesti."
+                if saves > 0 or shares > 0:
+                    headline = f"Medyanın {mult}x katında kaldı: Düşük kaydetme (%{saves_rate}) ve süre sapması akışı kesti."
+                else:
+                    headline = f"Medyanın {mult}x katında kaldı: İzleyici tutma oranı kanal ortalamasının ({median_views:,}) gerisinde kaldı."
                 action = f"Süreyi {avg_winning_duration} saniye bandına çekin ve ilk 2 saniyeye doğrudan sonuç gösteren görsel kanca ekleyin."
 
             dur_diff = dur - avg_winning_duration

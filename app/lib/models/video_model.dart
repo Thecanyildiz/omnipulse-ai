@@ -103,17 +103,36 @@ class VideoModel {
     AiVideoRootCause parsedRoot = AiVideoRootCause.fromJson(rootMap);
     if (parsedRoot.isEmpty) {
       final int safeV = viewsVal > 0 ? viewsVal : 1;
-      final String savesPct = ((savesVal / safeV) * 100).toStringAsFixed(2);
-      final String sharesPct = ((sharesVal / safeV) * 100).toStringAsFixed(2);
+      final String savesPct = ((savesVal / safeV) * 100).toStringAsFixed(1);
+      final String sharesPct = ((sharesVal / safeV) * 100).toStringAsFixed(1);
+      final String likesPct = ((likesVal / safeV) * 100).toStringAsFixed(1);
+
+      final String fallbackHeadline;
+      if (multVal >= 1.3) {
+        if (savesVal > 0 || sharesVal > 0) {
+          fallbackHeadline = 'Kanal medyanının \${multVal.toStringAsFixed(2)}x üstünde: Kaydetme (%$savesPct) ve Paylaşım (%$sharesPct) keşfeti tetikledi.';
+        } else if (likesVal > 0) {
+          fallbackHeadline = 'Kanal medyanının \${multVal.toStringAsFixed(2)}x üstünde: $viewsVal izlenme ve %$likesPct beğeni ivmesiyle öne çıktı.';
+        } else {
+          fallbackHeadline = 'Kanal medyanının \${multVal.toStringAsFixed(2)}x üstünde: Algoritmik kitle dağıtımı gerçekleşti ($viewsVal izlenme).';
+        }
+      } else if (multVal >= 0.7) {
+        fallbackHeadline = 'Kanal medyanı bandında (\${multVal.toStringAsFixed(2)}x): İstikrarlı organik performans ($viewsVal izlenme).';
+      } else {
+        if (savesVal > 0 || sharesVal > 0) {
+          fallbackHeadline = 'Medyanın \${multVal.toStringAsFixed(2)}x katında kaldı: Düşük kaydetme (%$savesPct) akışı kesti.';
+        } else {
+          fallbackHeadline = 'Medyanın \${multVal.toStringAsFixed(2)}x katında kaldı: İzleyici tutma oranı kanal ortalamasının gerisinde.';
+        }
+      }
+
       parsedRoot = AiVideoRootCause(
         verdict: tierVal.toUpperCase(),
-        primaryReasonHeadline: multVal >= 1.3
-            ? 'Yüksek Kaydetme (%$savesPct) ve Paylaşım (%$sharesPct) Videoyu Keşfette Tuttu'
-            : 'Düşük Kaydetme (%$savesPct) ve Süre ($durVal sn) Akış İvmesini Sınırladı',
+        primaryReasonHeadline: fallbackHeadline,
         durationImpact:
-            'Video süresi $durVal saniye. Kanal medyan çarpanı ${multVal.toStringAsFixed(2)}x olarak gerçekleşti.',
+            'Video süresi $durVal saniye. Kanal medyan çarpanı \${multVal.toStringAsFixed(2)}x olarak gerçekleşti.',
         algorithmSignalBreakdown:
-            'Kaydetme/İzlenme: %$savesPct | Paylaşım/İzlenme: %$sharesPct | Viralite Skoru: ${virVal.toStringAsFixed(1)}/100.',
+            'Kaydetme: $savesVal | Paylaşım: $sharesVal | Beğeni: $likesVal | Viralite Skoru: \${virVal.toStringAsFixed(1)}/100.',
         hookAndTimingEvaluation:
             'İlk 3 saniye merak boşluğu ve başlık yapısı izleyici tutma oranını doğrudan belirledi.',
         immediateFixOrReplicateAction: multVal >= 1.3

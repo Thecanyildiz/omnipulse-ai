@@ -38,29 +38,77 @@ class MathEngine:
         shares: int,
         saves: int,
         has_saves_shares: bool = True,
+        median_views: int = 0,
     ) -> float:
         """
-        Kaydetme ve Paylaşma verisi mevcutsa (TikTok Tümü + IG/YT Mod B):
-          W_raw = ((Likes * 1.0) + (Comments * 2.5) + (Shares * 4.5) + (Saves * 5.0)) / max(Views, 1) * 100
-        Sadece Beğeni ve Yorum mevcutsa (IG/YT Mod A):
-          W_raw = ((Likes * 1.5) + (Comments * 4.0)) / max(Views, 1) * 100
-        0-100 Normalizasyonu:
-          V_score = min(100.0, round(W_raw * 6.5, 1))
+        Algoritmik Viralite Skoru (V_score: 0 - 100):
+        Bir videonun 'viral' olması iki ana faktöre dayanır:
+        1. Kanal Medyan Çarpanı (M_perf) ve Algoritmik Kırılma (Ağırlık: %65):
+           Videonun kanalın olağan taban çizgisini (medyan) kaç kat aştığı.
+        2. Etkileşim İvmesi (Ağırlık: %35):
+           Beğeni, yorum, paylaşım ve kaydetme yoğunluğu; ancak küçük izlenmelerde
+           (3-5 izlenme) oran patlamasını engellemek için Laplace/Bayesian yumuşatması (views + 25) uygulanır.
         """
-        safe_views = max(int(views), 1)
-        if has_saves_shares or int(shares) > 0 or int(saves) > 0:
-            weighted_sum = (
-                (int(likes) * 1.0)
-                + (int(comments) * 2.5)
-                + (int(shares) * 4.5)
-                + (int(saves) * 5.0)
+        int_views = max(0, int(views))
+        int_likes = max(0, int(likes))
+        int_comments = max(0, int(comments))
+        int_shares = max(0, int(shares))
+        int_saves = max(0, int(saves))
+        safe_median = max(1, int(median_views)) if median_views > 0 else max(1, int_views)
+
+        # 1. Medyan Çarpanı (Multiplier) Skoru (0 - 100)
+        if median_views > 0:
+            multiplier = int_views / safe_median
+            if multiplier < 0.2:
+                # 0.2x altı (Örn: 3 izlenme / 116 medyan = 0.03x) -> Flop (0 - 10 puan)
+                mult_score = (multiplier / 0.2) * 10.0
+            elif multiplier < 0.7:
+                # 0.2x - 0.7x arası -> Düşük / İvme Kaybı (10 - 35 puan)
+                mult_score = 10.0 + ((multiplier - 0.2) / 0.5) * 25.0
+            elif multiplier < 1.3:
+                # 0.7x - 1.3x arası -> Dengeli / Kanal Medyanı civarı (35 - 60 puan)
+                mult_score = 35.0 + ((multiplier - 0.7) / 0.6) * 25.0
+            elif multiplier < 2.5:
+                # 1.3x - 2.5x arası -> Güçlü Yükseliş / Keşfete Çıkış (60 - 85 puan)
+                mult_score = 60.0 + ((multiplier - 1.3) / 1.2) * 25.0
+            elif multiplier < 5.0:
+                # 2.5x - 5.0x arası -> Viral Kırılma (85 - 95 puan)
+                mult_score = 85.0 + ((multiplier - 2.5) / 2.5) * 10.0
+            else:
+                # 5.0x ve üzeri -> Süper Viral (95 - 100 puan)
+                mult_score = min(100.0, 95.0 + (multiplier - 5.0) * 1.0)
+        else:
+            # Medyan yoksa (örn. rakip radarı), izlenme hacmi logaritmik skalada hesaplanır
+            if int_views <= 10:
+                mult_score = (int_views / 10.0) * 15.0
+            else:
+                # 10 izlenme -> 15 puan, 1.000 izlenme -> 60 puan, 100.000 izlenme -> 95 puan
+                mult_score = min(100.0, 15.0 + math.log10(int_views / 10.0) * 20.0)
+
+        # 2. Etkileşim İvmesi Skoru (Küçük sayılarda patlamayı önlemek için +25 payda yumuşatması)
+        if has_saves_shares and (int_shares > 0 or int_saves > 0):
+            weighted_actions = (
+                (int_likes * 1.0)
+                + (int_comments * 2.5)
+                + (int_shares * 4.5)
+                + (int_saves * 5.0)
             )
         else:
-            weighted_sum = (int(likes) * 1.5) + (int(comments) * 4.0)
+            weighted_actions = (int_likes * 1.5) + (int_comments * 4.0)
 
-        w_raw = (weighted_sum / safe_views) * 100.0
-        v_score = min(100.0, round(w_raw * 6.5, 1))
-        return max(0.0, v_score)
+        # Bayesian / Laplace yumuşatma paydası: küçük izlenmelerde oran 100'e fırlayamaz
+        smoothed_views = int_views + 25.0
+        smoothed_action_rate = (weighted_actions / smoothed_views) * 100.0
+        engagement_score = min(100.0, smoothed_action_rate * 5.0)
+
+        # 3. İzlenme Tabanı Katsayısı: 10 izlenmenin altındaki videolar asla 25 puanı geçemez
+        if int_views < 10:
+            volume_dampener = max(0.1, int_views / 10.0)
+            final_score = (mult_score * 0.70 + engagement_score * 0.30) * volume_dampener
+        else:
+            final_score = mult_score * 0.70 + engagement_score * 0.30
+
+        return max(0.0, min(100.0, round(final_score, 1)))
 
     # =========================================================================
     # 4.3. Kanal Medyan Çarpanı (Performance Multiplier - M_perf) & Sınıfı
@@ -273,6 +321,7 @@ class MathEngine:
                 shares,
                 saves,
                 has_saves_shares=has_saves_shares,
+                median_views=median_views,
             )
             multiplier = cls.calculate_performance_multiplier(views, median_views)
             tier = cls.classify_performance_tier(multiplier)
